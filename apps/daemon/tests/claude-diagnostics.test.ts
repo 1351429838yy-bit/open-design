@@ -41,6 +41,21 @@ describe('diagnoseClaudeCliFailure', () => {
     expect(diagnostic?.detail).not.toContain('use `/login`');
   });
 
+  it('maps silent custom endpoint exits to endpoint guidance', () => {
+    const diagnostic = diagnoseClaudeCliFailure({
+      agentId: 'claude',
+      exitCode: 1,
+      stderrTail: '',
+      stdoutTail: '',
+      env: { ANTHROPIC_BASE_URL: 'https://proxy.example.com' },
+    });
+
+    expect(diagnostic?.message).toContain('custom Anthropic endpoint');
+    expect(diagnostic?.detail).toContain('ANTHROPIC_BASE_URL');
+    expect(diagnostic?.detail).toContain('proxy credentials');
+    expect(diagnostic?.detail).not.toContain('use `/login`');
+  });
+
   it('includes configured Claude config directory context', () => {
     const diagnostic = diagnoseClaudeCliFailure({
       agentId: 'claude',

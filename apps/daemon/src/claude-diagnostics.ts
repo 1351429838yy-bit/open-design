@@ -123,6 +123,14 @@ export function diagnoseClaudeCliFailure(
     return withContext(message, detail, input);
   }
 
+  if (!text.trim() && input.exitCode === 1 && hasCustomBaseUrl) {
+    return withContext(
+      'Claude Code exited before producing diagnostics while using a custom Anthropic endpoint.',
+      'Check ANTHROPIC_BASE_URL, proxy credentials, endpoint authentication environment, and model access. Remove the custom endpoint only if you want to retry with standard Claude Code auth.',
+      input,
+    );
+  }
+
   if (!text.trim() && input.exitCode === 1 && !hasConfigDir) {
     return withContext(
       'Claude Code exited before producing diagnostics.',
