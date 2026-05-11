@@ -1620,10 +1620,10 @@ export function ProjectView({
 
   const handleSendBoardCommentAttachments = useCallback(
     async (commentAttachments: ChatCommentAttachment[]) => {
-      if (currentConversationBusy || commentAttachments.length === 0) return;
+      if (currentConversationActionDisabled || commentAttachments.length === 0) return;
       await handleSend('', [], commentAttachments);
     },
-    [handleSend, currentConversationBusy],
+    [handleSend, currentConversationActionDisabled],
   );
 
   const persistArtifact = useCallback(

@@ -92,8 +92,23 @@ vi.mock('../../src/components/AvatarMenu', () => ({
 }));
 
 vi.mock('../../src/components/FileWorkspace', () => ({
-  FileWorkspace: ({ streaming }: { streaming: boolean }) => (
-    <output data-testid="workspace-streaming-state">{streaming ? 'streaming' : 'idle'}</output>
+  FileWorkspace: ({
+    streaming,
+    onSendBoardCommentAttachments,
+  }: {
+    streaming: boolean;
+    onSendBoardCommentAttachments: (attachments: unknown[]) => void;
+  }) => (
+    <>
+      <output data-testid="workspace-streaming-state">{streaming ? 'streaming' : 'idle'}</output>
+      <button
+        type="button"
+        data-testid="workspace-send-comment"
+        onClick={() => onSendBoardCommentAttachments([{ id: 'comment-1' }])}
+      >
+        workspace send
+      </button>
+    </>
   ),
 }));
 
@@ -340,6 +355,7 @@ describe('ProjectView conversation run isolation', () => {
     expect(screen.getByTestId('send-message')).toHaveProperty('disabled', true);
 
     fireEvent.click(screen.getByTestId('send-message'));
+    fireEvent.click(screen.getByTestId('workspace-send-comment'));
 
     expect(streamViaDaemon).not.toHaveBeenCalled();
     expect(reattachDaemonRun).not.toHaveBeenCalled();
