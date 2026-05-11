@@ -1452,6 +1452,7 @@ function BoardComposerPopover({
   const pendingCount = notes.length + (draft.trim() ? 1 : 0);
   const podMembers = target.podMembers ?? [];
   const titleId = useId();
+  const isFreePin = target.elementId.startsWith('pin-');
   return (
     <div
       className="comment-popover"
@@ -1468,12 +1469,26 @@ function BoardComposerPopover({
     >
       <div className="comment-popover-head">
         <div title={target.elementId}>
-          <strong id={titleId}>{target.elementId}</strong>
-          <span>{target.label}</span>
-          <span>{selectionKindLabel(target.selectionKind, target.memberCount)}</span>
+          {isFreePin ? (
+            <>
+              <strong id={titleId}>Pin</strong>
+              <span>at {target.position.x + 12}, {target.position.y + 12}</span>
+            </>
+          ) : (
+            <>
+              <strong id={titleId}>{target.label || target.elementId}</strong>
+              <span>{selectionKindLabel(target.selectionKind, target.memberCount)}</span>
+            </>
+          )}
         </div>
-        <button type="button" className="ghost" onClick={onClose} title={t('common.close')}>
-          {t('common.close')}
+        <button
+          type="button"
+          className="comment-popover-close"
+          onClick={onClose}
+          title={t('common.close')}
+          aria-label={t('common.close')}
+        >
+          <Icon name="close" size={12} />
         </button>
       </div>
       {podMembers.length > 0 ? (
@@ -1510,37 +1525,47 @@ function BoardComposerPopover({
       />
       <div className="comment-popover-actions">
         {existing ? (
-          <button type="button" className="comment-popover-remove" onClick={() => onRemove(existing.id)}>
-            {t('chat.comments.remove')}
-          </button>
-        ) : <span />}
-        <button
-          type="button"
-          className="ghost"
-          disabled={!draft.trim()}
-          onClick={onAddDraft}
-        >
-          Add note
-        </button>
-        {target.selectionKind === 'pod' ? null : (
           <button
             type="button"
-            className="ghost"
-            disabled={!draft.trim()}
-            onClick={() => void onSaveComment()}
+            className="comment-popover-remove"
+            onClick={() => onRemove(existing.id)}
+            title={t('chat.comments.remove')}
           >
-            Save comment
+            {t('chat.comments.remove')}
           </button>
-        )}
-        <button
-          type="button"
-          className="primary"
-          data-testid="comment-add-send"
-          disabled={pendingCount === 0 || sending}
-          onClick={() => void onSendBatch()}
-        >
-          {sending ? 'Sending...' : 'Send to chat'}
-        </button>
+        ) : null}
+        <div className="comment-popover-actions-end">
+          {target.selectionKind === 'pod' ? (
+            <button
+              type="button"
+              className="ghost"
+              data-testid="comment-popover-add-note"
+              disabled={!draft.trim()}
+              onClick={onAddDraft}
+            >
+              Add note
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ghost"
+              data-testid="comment-popover-save"
+              disabled={!draft.trim()}
+              onClick={() => void onSaveComment()}
+            >
+              Comment
+            </button>
+          )}
+          <button
+            type="button"
+            className="primary"
+            data-testid="comment-add-send"
+            disabled={pendingCount === 0 || sending}
+            onClick={() => void onSendBatch()}
+          >
+            {sending ? 'Sending…' : 'Send to Claude'}
+          </button>
+        </div>
       </div>
     </div>
   );
