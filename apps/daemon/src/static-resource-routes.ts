@@ -2,22 +2,30 @@ import type { Express } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { detectAgents } from './agents.js';
-import { findSkillById, listSkills, splitDerivedSkillId } from './skills.js';
+import { findSkillById, splitDerivedSkillId } from './skills.js';
 import { listCodexPets, readCodexPetSpritesheet } from './codex-pets.js';
 import { syncCommunityPets } from './community-pets-sync.js';
-import { listDesignSystems, readDesignSystem } from './design-systems.js';
+import { readDesignSystem } from './design-systems.js';
 import { renderDesignSystemPreview } from './design-system-preview.js';
 import { renderDesignSystemShowcase } from './design-system-showcase.js';
 import { listPromptTemplates, readPromptTemplate } from './prompt-templates.js';
 import { readAppConfig } from './app-config.js';
+import { installFromTarget, uninstallById } from './library-install.js';
 import type { RouteDeps } from './server-context.js';
 
 export interface RegisterStaticResourceRoutesDeps extends RouteDeps<'http' | 'paths' | 'resources'> {}
 
 export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticResourceRoutesDeps) {
-  const { sendApiError } = ctx.http;
-  const { RUNTIME_DATA_DIR, DESIGN_SYSTEMS_DIR, SKILLS_DIR, PROMPT_TEMPLATES_DIR, BUNDLED_PETS_DIR } = ctx.paths;
-  const { mimeFor } = ctx.resources;
+  const {
+    RUNTIME_DATA_DIR,
+    DESIGN_SYSTEMS_DIR,
+    USER_DESIGN_SYSTEMS_DIR,
+    SKILLS_DIR,
+    USER_SKILLS_DIR,
+    PROMPT_TEMPLATES_DIR,
+    BUNDLED_PETS_DIR,
+  } = ctx.paths;
+  const { listAllSkills, listAllDesignSystems, mimeFor } = ctx.resources;
   app.get('/api/agents', async (_req, res) => {
     try {
       const config = await readAppConfig(RUNTIME_DATA_DIR);
@@ -30,7 +38,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
 
   app.get('/api/skills', async (_req, res) => {
     try {
-      const skills = await listSkills(SKILLS_DIR);
+      const skills = await listAllSkills();
       // Strip full body + on-disk dir from the listing — frontend fetches the
       // body via /api/skills/:id when needed (keeps the listing payload small).
       res.json({
@@ -46,7 +54,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
 
   app.get('/api/skills/:id', async (req, res) => {
     try {
-      const skills = await listSkills(SKILLS_DIR);
+      const skills = await listAllSkills();
       const skill = findSkillById(skills, req.params.id);
       if (!skill) return res.status(404).json({ error: 'skill not found' });
       const { dir: _dir, ...serializable } = skill;
@@ -132,7 +140,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
 
   app.get('/api/design-systems', async (_req, res) => {
     try {
-      const systems = await listDesignSystems(DESIGN_SYSTEMS_DIR);
+      const systems = await listAllDesignSystems();
       res.json({
         designSystems: systems.map(({ body, ...rest }) => rest),
       });
@@ -143,7 +151,9 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
 
   app.get('/api/design-systems/:id', async (req, res) => {
     try {
-      const body = await readDesignSystem(DESIGN_SYSTEMS_DIR, req.params.id);
+      const body =
+        (await readDesignSystem(DESIGN_SYSTEMS_DIR, req.params.id)) ??
+        (await readDesignSystem(USER_DESIGN_SYSTEMS_DIR, req.params.id));
       if (body === null)
         return res.status(404).json({ error: 'design system not found' });
       res.json({ id: req.params.id, body });
@@ -184,7 +194,9 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // file shows up on the next view, no rebuild needed.
   app.get('/api/design-systems/:id/preview', async (req, res) => {
     try {
-      const body = await readDesignSystem(DESIGN_SYSTEMS_DIR, req.params.id);
+      const body =
+        (await readDesignSystem(DESIGN_SYSTEMS_DIR, req.params.id)) ??
+        (await readDesignSystem(USER_DESIGN_SYSTEMS_DIR, req.params.id));
       if (body === null)
         return res.status(404).type('text/plain').send('not found');
       const html = renderDesignSystemPreview(req.params.id, body);
@@ -199,7 +211,9 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // /preview: built at request time, no caching.
   app.get('/api/design-systems/:id/showcase', async (req, res) => {
     try {
-      const body = await readDesignSystem(DESIGN_SYSTEMS_DIR, req.params.id);
+      const body =
+        (await readDesignSystem(DESIGN_SYSTEMS_DIR, req.params.id)) ??
+        (await readDesignSystem(USER_DESIGN_SYSTEMS_DIR, req.params.id));
       if (body === null)
         return res.status(404).type('text/plain').send('not found');
       const html = renderDesignSystemShowcase(req.params.id, body);
@@ -238,7 +252,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   //      a real preview on its parent card instead of returning 404.
   app.get('/api/skills/:id/example', async (req, res) => {
     try {
-      const skills = await listSkills(SKILLS_DIR);
+      const skills = await listAllSkills();
 
       // 1. Derived `<parent>:<child>` id — resolve straight to the matching
       // file under <parentDir>/examples/. Done before findSkillById so the
@@ -360,7 +374,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // contributors can preview `example.html` straight from disk.
   app.get('/api/skills/:id/assets/*', async (req, res) => {
     try {
-      const skills = await listSkills(SKILLS_DIR);
+      const skills = await listAllSkills();
       const skill = findSkillById(skills, req.params.id);
       if (!skill) {
         return res.status(404).type('text/plain').send('skill not found');
@@ -383,6 +397,76 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       res.type(mimeFor(target)).sendFile(target);
     } catch (err: any) {
       res.status(500).type('text/plain').send(String(err));
+    }
+  });
+
+  app.post('/api/skills/install', async (req, res) => {
+    try {
+      const result = await installFromTarget(req.body, USER_SKILLS_DIR, 'skill');
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      if (typeof result.dir !== 'string' || !result.dir) {
+        return res.status(500).json({ error: 'skill install did not return an installation directory' });
+      }
+      const skills = await listAllSkills();
+      const installedDir = fs.realpathSync.native(result.dir);
+      const skill = skills.find((candidate) => fs.realpathSync.native(candidate.dir) === installedDir);
+      if (!skill) {
+        return res.status(500).json({ error: `installed skill was not found in catalog: ${result.dir}` });
+      }
+      res.json({
+        skill: {
+          ...skill,
+          dir: undefined,
+          body: undefined,
+          hasBody: typeof skill.body === 'string' && skill.body.length > 0,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.delete('/api/skills/:id', async (req, res) => {
+    try {
+      const result = await uninstallById(req.params.id, USER_SKILLS_DIR, SKILLS_DIR, 'skill');
+      if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.post('/api/design-systems/install', async (req, res) => {
+    try {
+      const result = await installFromTarget(req.body, USER_DESIGN_SYSTEMS_DIR, 'design-system');
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      if (typeof result.dir !== 'string' || !result.dir) {
+        return res.status(500).json({ error: 'design system install did not return an installation directory' });
+      }
+      const systems = await listAllDesignSystems();
+      const designSystemId = path.basename(fs.realpathSync.native(result.dir));
+      const designSystem = systems.find((system) => system.id === designSystemId);
+      if (!designSystem) {
+        return res.status(500).json({ error: `installed design system was not found in catalog: ${result.dir}` });
+      }
+      res.json({ designSystem });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.delete('/api/design-systems/:id', async (req, res) => {
+    try {
+      const result = await uninstallById(
+        req.params.id,
+        USER_DESIGN_SYSTEMS_DIR,
+        DESIGN_SYSTEMS_DIR,
+        'design-system',
+      );
+      if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err) });
     }
   });
 

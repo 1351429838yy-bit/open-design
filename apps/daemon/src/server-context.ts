@@ -1,10 +1,48 @@
 import type { Express } from 'express';
+import type { SkillInfo } from './skills.js';
+import type { DesignSystemSummary } from './design-systems.js';
+import type { RoutineRoutesService } from './routine-routes.js';
+
+export interface HttpDeps {
+  createSseResponse: (...args: any[]) => any;
+  isLocalSameOrigin: (...args: any[]) => boolean;
+  requireLocalDaemonRequest: (...args: any[]) => any;
+  resolvedPortRef: { current: number };
+  sendApiError: (...args: any[]) => any;
+  sendLiveArtifactRouteError: (...args: any[]) => any;
+  sendMulterError: (...args: any[]) => any;
+}
+
+export interface PathDeps {
+  ARTIFACTS_DIR: string;
+  BUNDLED_PETS_DIR: string;
+  DESIGN_SYSTEMS_DIR: string;
+  OD_BIN: string;
+  PROJECT_ROOT: string;
+  PROJECTS_DIR: string;
+  PROMPT_TEMPLATES_DIR: string;
+  RUNTIME_DATA_DIR: string;
+  RUNTIME_DATA_DIR_CANONICAL: string;
+  SKILLS_DIR: string;
+  USER_DESIGN_SYSTEMS_DIR: string;
+  USER_SKILLS_DIR: string;
+}
+
+export interface ResourceDeps {
+  listAllDesignSystems: () => Promise<Array<DesignSystemSummary & { source?: string }>>;
+  listAllSkills: () => Promise<Array<SkillInfo & { source?: string }>>;
+  mimeFor: (filePath: string) => string;
+}
+
+export interface RoutineDeps {
+  routineService: RoutineRoutesService;
+}
 
 export interface ServerContext {
   db: any;
   design: any;
-  http: any;
-  paths: any;
+  http: HttpDeps;
+  paths: PathDeps;
   ids: any;
   uploads: any;
   node: any;
@@ -27,7 +65,8 @@ export interface ServerContext {
   nativeDialogs: any;
   research: any;
   mcp: any;
-  resources: any;
+  resources: ResourceDeps;
+  routines: RoutineDeps;
   validation: any;
   finalize: any;
   chat: any;
