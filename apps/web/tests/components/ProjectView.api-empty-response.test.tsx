@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectView } from '../../src/components/ProjectView';
 import { streamMessage } from '../../src/providers/anthropic';
 import type { StreamHandlers } from '../../src/providers/anthropic';
-import { writeProjectTextFile } from '../../src/providers/registry';
+import { patchPreviewCommentStatus, writeProjectTextFile } from '../../src/providers/registry';
 import { saveMessage } from '../../src/state/projects';
 import type {
   AgentEvent,
@@ -21,6 +21,10 @@ import type {
   Project,
   SkillSummary,
 } from '../../src/types';
+
+const chatPaneMockState = vi.hoisted(() => ({
+  commentAttachments: [] as ChatCommentAttachment[],
+}));
 
 vi.mock('../../src/router', () => ({
   navigate: vi.fn(),
@@ -114,7 +118,7 @@ vi.mock('../../src/components/ChatPane', () => ({
     ) => void;
   }) => (
     <div>
-      <button type="button" onClick={() => onSend('Create a login page', [], [])}>
+      <button type="button" onClick={() => onSend('Create a login page', [], chatPaneMockState.commentAttachments)}>
         send
       </button>
       {messages.map((message) => (
@@ -136,6 +140,7 @@ vi.mock('../../src/components/ChatPane', () => ({
 const mockedStreamMessage = vi.mocked(streamMessage);
 const mockedSaveMessage = vi.mocked(saveMessage);
 const mockedWriteProjectTextFile = vi.mocked(writeProjectTextFile);
+const mockedPatchPreviewCommentStatus = vi.mocked(patchPreviewCommentStatus);
 
 const config: AppConfig = {
   mode: 'api',
@@ -183,9 +188,11 @@ function renderProjectView() {
 
 describe('ProjectView API empty response handling', () => {
   beforeEach(() => {
+    chatPaneMockState.commentAttachments = [];
     mockedStreamMessage.mockReset();
     mockedSaveMessage.mockClear();
     mockedWriteProjectTextFile.mockClear();
+    mockedPatchPreviewCommentStatus.mockClear();
   });
 
   afterEach(() => {
@@ -230,6 +237,52 @@ describe('ProjectView API empty response handling', () => {
     });
   });
 
+  it('marks attached saved comments as failed when an API completion has no output', async () => {
+    chatPaneMockState.commentAttachments = [
+      {
+        id: 'comment-1',
+        order: 1,
+        filePath: 'index.html',
+        elementId: 'hero-title',
+        selector: '#hero-title',
+        label: 'Hero title',
+        comment: 'Make this clearer',
+        currentText: 'Old title',
+        pagePosition: { x: 0, y: 0, width: 100, height: 24 },
+        htmlHint: '<h1 id="hero-title">Old title</h1>',
+        source: 'saved-comment',
+      },
+    ];
+    mockedStreamMessage.mockImplementation(async (
+      _cfg: AppConfig,
+      _system: string,
+      _history: ChatMessage[],
+      _signal: AbortSignal,
+      handlers: StreamHandlers,
+    ) => {
+      handlers.onDone('');
+    });
+    renderProjectView();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'send' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+
+    await waitFor(() => {
+      expect(mockedPatchPreviewCommentStatus).toHaveBeenCalledWith(
+        project.id,
+        'conv-project-1',
+        'comment-1',
+        'failed',
+      );
+    });
+    await waitFor(() => {
+      expect(hasSavedAssistantMessage((message) => (
+        message.runStatus === undefined &&
+        message.events?.some((event) => event.kind === 'status' && event.label === 'empty_response') === true
+      ))).toBe(true);
+    });
+  });
+
   it('keeps normal API text completions on the succeeded path', async () => {
     mockedStreamMessage.mockImplementation(async (
       _cfg: AppConfig,
@@ -247,7 +300,9 @@ describe('ProjectView API empty response handling', () => {
     fireEvent.click(screen.getByRole('button', { name: 'send' }));
 
     await waitFor(() => expect(screen.getAllByText('hello').length).toBeGreaterThan(0));
-    await waitFor(() => expect(screen.getByText('succeeded')).toBeTruthy());
+    await waitFor(() => {
+      expect(hasSavedAssistantMessage((message) => message.runStatus === 'succeeded')).toBe(true);
+    });
     expect(screen.queryByText(/provider ended the request/i)).toBeNull();
   });
 
@@ -271,9 +326,18 @@ describe('ProjectView API empty response handling', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'send' })).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'send' }));
 
-    await waitFor(() => expect(screen.getByText('succeeded')).toBeTruthy());
+    await waitFor(() => {
+      expect(hasSavedAssistantMessage((message) => message.runStatus === 'succeeded')).toBe(true);
+    });
     await waitFor(() => expect(mockedWriteProjectTextFile).toHaveBeenCalled());
     expect(screen.queryByText(/provider ended the request/i)).toBeNull();
     expect(screen.queryByText('empty_response:deepseek-chat')).toBeNull();
   });
 });
+
+function hasSavedAssistantMessage(predicate: (message: ChatMessage) => boolean): boolean {
+  return mockedSaveMessage.mock.calls.some((call) => {
+    const message = call[2] as ChatMessage;
+    return message.role === 'assistant' && predicate(message);
+  });
+}

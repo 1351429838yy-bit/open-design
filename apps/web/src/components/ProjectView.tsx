@@ -1276,6 +1276,9 @@ export function ProjectView({
               true,
               { telemetryFinalized: true },
             );
+            if (commentAttachments.length > 0) {
+              void patchAttachedStatuses(commentAttachments, 'failed');
+            }
             setStreaming(false);
             abortRef.current = null;
             cancelRef.current = null;
