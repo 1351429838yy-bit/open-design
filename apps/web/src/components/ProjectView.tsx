@@ -892,6 +892,18 @@ export function ProjectView({
     setStreaming(next !== null);
   }, []);
 
+  const clearActiveRunRefs = useCallback((
+    conversationId: string,
+    controller: AbortController,
+    cancelController: AbortController,
+  ) => {
+    if (!shouldClearActiveRunRefs(streamingConversationIdRef.current, conversationId)) {
+      return;
+    }
+    if (abortRef.current === controller) abortRef.current = null;
+    if (cancelRef.current === cancelController) cancelRef.current = null;
+  }, []);
+
   const appendAssistantErrorEvent = useCallback(
     (messageId: string, message: string) => {
       if (!message) return;
@@ -1087,8 +1099,7 @@ export function ProjectView({
               completedReattachRunsRef.current.add(runId);
               reattachControllersRef.current.delete(runId);
               reattachCancelControllersRef.current.delete(runId);
-              if (abortRef.current === controller) abortRef.current = null;
-              if (cancelRef.current === cancelController) cancelRef.current = null;
+              clearActiveRunRefs(reattachConversationId, controller, cancelController);
               clearStreamingMarker(reattachConversationId);
               persistNow({ telemetryFinalized: true });
               void refreshProjectFiles();
@@ -1108,8 +1119,7 @@ export function ProjectView({
               completedReattachRunsRef.current.add(runId);
               reattachControllersRef.current.delete(runId);
               reattachCancelControllersRef.current.delete(runId);
-              if (abortRef.current === controller) abortRef.current = null;
-              if (cancelRef.current === cancelController) cancelRef.current = null;
+              clearActiveRunRefs(reattachConversationId, controller, cancelController);
               clearStreamingMarker(reattachConversationId);
               persistNow({ telemetryFinalized: true });
             },
@@ -1131,8 +1141,7 @@ export function ProjectView({
               completedReattachRunsRef.current.add(runId);
               reattachControllersRef.current.delete(runId);
               reattachCancelControllersRef.current.delete(runId);
-              if (abortRef.current === controller) abortRef.current = null;
-              if (cancelRef.current === cancelController) cancelRef.current = null;
+              clearActiveRunRefs(reattachConversationId, controller, cancelController);
               clearStreamingMarker(reattachConversationId);
               persistNow({ telemetryFinalized: true });
             }
@@ -1163,8 +1172,7 @@ export function ProjectView({
             if (persistTimer) clearTimeout(persistTimer);
             reattachControllersRef.current.delete(runId);
             reattachCancelControllersRef.current.delete(runId);
-            if (abortRef.current === controller) abortRef.current = null;
-            if (cancelRef.current === cancelController) cancelRef.current = null;
+            clearActiveRunRefs(reattachConversationId, controller, cancelController);
           });
       }
     };
@@ -1183,6 +1191,7 @@ export function ProjectView({
     persistMessageById,
     markStreamingConversation,
     clearStreamingMarker,
+    clearActiveRunRefs,
     refreshProjectFiles,
     onProjectsRefresh,
   ]);
@@ -1455,10 +1464,9 @@ export function ProjectView({
             if (commentAttachments.length > 0) {
               void patchAttachedStatuses(commentAttachments, 'failed');
             }
+            clearActiveRunRefs(runConversationId, controller, cancelController);
             clearStreamingMarker(runConversationId);
             updateConversationLatestRun('failed', endedAt);
-            abortRef.current = null;
-            cancelRef.current = null;
             void refreshProjectFiles();
             onProjectsRefresh();
             return;
@@ -1476,10 +1484,9 @@ export function ProjectView({
           if (commentAttachments.length > 0) {
             void patchAttachedStatuses(commentAttachments, 'needs_review');
           }
+          clearActiveRunRefs(runConversationId, controller, cancelController);
           clearStreamingMarker(runConversationId);
           updateConversationLatestRun(finalRunStatus ?? 'succeeded', endedAt);
-          abortRef.current = null;
-          cancelRef.current = null;
           // Persist the finished artifact to the project folder so it shows
           // up as a real tab (not just the synthetic "live" stream).
           setArtifact((prev) => {
@@ -1523,10 +1530,9 @@ export function ProjectView({
           if (commentAttachments.length > 0) {
             void patchAttachedStatuses(commentAttachments, 'failed');
           }
+          clearActiveRunRefs(runConversationId, controller, cancelController);
           clearStreamingMarker(runConversationId);
           updateConversationLatestRun('failed', endedAt);
-          abortRef.current = null;
-          cancelRef.current = null;
           setMessages((curr) => {
             const finalized = curr.find((m) => m.id === assistantId);
             if (finalized) persistMessage(finalized, { telemetryFinalized: true });
@@ -1576,6 +1582,10 @@ export function ProjectView({
               runStatus === 'canceled' ? { telemetryFinalized: true } : undefined,
             );
             updateConversationLatestRun(runStatus, endedAt);
+            if (isTerminalRunStatus(runStatus)) {
+              clearActiveRunRefs(runConversationId, controller, cancelController);
+              clearStreamingMarker(runConversationId);
+            }
           },
           onRunEventId: (lastRunEventId) => {
             updateMessageById(assistantId, (prev) => ({ ...prev, lastRunEventId }));
@@ -1686,6 +1696,7 @@ export function ProjectView({
       updateMessageById,
       markStreamingConversation,
       clearStreamingMarker,
+      clearActiveRunRefs,
       onProjectsRefresh,
     ],
   );
@@ -2520,6 +2531,13 @@ export function clearStreamingConversationMarker(
     return currentConversationId;
   }
   return null;
+}
+
+export function shouldClearActiveRunRefs(
+  currentConversationId: string | null,
+  completedConversationId: string,
+): boolean {
+  return currentConversationId === completedConversationId;
 }
 
 export function finalizeActiveAssistantMessagesOnStop(

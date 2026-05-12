@@ -7,6 +7,7 @@ import {
   clearStreamingConversationMarker,
   finalizeActiveAssistantMessagesOnStop,
   resolveSucceededRunStatus,
+  shouldClearActiveRunRefs,
 } from '../../src/components/ProjectView';
 import type { ChatMessage } from '../../src/types';
 
@@ -239,6 +240,12 @@ describe('ProjectView daemon cleanup', () => {
     expect(clearStreamingConversationMarker('conv-b', 'conv-a')).toBe('conv-b');
     expect(clearStreamingConversationMarker('conv-b', 'conv-b')).toBeNull();
     expect(clearStreamingConversationMarker('conv-b')).toBeNull();
+  });
+
+  it('does not clear active run refs from a stale conversation completion', () => {
+    expect(shouldClearActiveRunRefs('conv-b', 'conv-a')).toBe(false);
+    expect(shouldClearActiveRunRefs('conv-b', 'conv-b')).toBe(true);
+    expect(shouldClearActiveRunRefs(null, 'conv-a')).toBe(false);
   });
 
   it('marks a recoverable daemon run as failed when the run status can no longer be fetched', async () => {
