@@ -2477,6 +2477,12 @@ function isActiveRunStatus(status: ChatMessage['runStatus']): boolean {
   return status === 'queued' || status === 'running';
 }
 
+function isStoppableAssistantMessage(message: ChatMessage): boolean {
+  if (message.role !== 'assistant') return false;
+  if (isActiveRunStatus(message.runStatus)) return true;
+  return message.runStatus === undefined && message.endedAt === undefined && message.startedAt !== undefined;
+}
+
 export function resolveSucceededRunStatus(status: ChatMessage['runStatus']): ChatMessage['runStatus'] {
   return status === 'failed' || status === 'canceled' ? status : 'succeeded';
 }
@@ -2487,7 +2493,7 @@ export function finalizeActiveAssistantMessagesOnStop(
 ): { messages: ChatMessage[]; finalized: ChatMessage[] } {
   const finalized: ChatMessage[] = [];
   const next = messages.map((message) => {
-    if (message.role !== 'assistant' || !isActiveRunStatus(message.runStatus)) {
+    if (!isStoppableAssistantMessage(message)) {
       return message;
     }
     const updated = {

@@ -176,7 +176,7 @@ describe('ProjectView daemon cleanup', () => {
     expect(resolveSucceededRunStatus('canceled')).toBe('canceled');
   });
 
-  it('only finalizes active assistant runs when Stop is clicked', () => {
+  it('finalizes active and pending API assistant runs when Stop is clicked', () => {
     const stoppedAt = 2_000;
     const completedWithoutEndedAt: ChatMessage = {
       id: 'completed',
@@ -194,9 +194,24 @@ describe('ProjectView daemon cleanup', () => {
       startedAt: 500,
       runStatus: 'running',
     };
+    const apiPending: ChatMessage = {
+      id: 'api-pending',
+      role: 'assistant',
+      content: 'working through api',
+      createdAt: 700,
+      startedAt: 700,
+      runStatus: undefined,
+    };
+    const historicalWithoutStatus: ChatMessage = {
+      id: 'historical',
+      role: 'assistant',
+      content: 'old imported message',
+      createdAt: 50,
+      runStatus: undefined,
+    };
 
     const result = finalizeActiveAssistantMessagesOnStop(
-      [completedWithoutEndedAt, active],
+      [completedWithoutEndedAt, active, apiPending, historicalWithoutStatus],
       stoppedAt,
     );
 
@@ -206,7 +221,13 @@ describe('ProjectView daemon cleanup', () => {
       runStatus: 'canceled',
       endedAt: stoppedAt,
     });
-    expect(result.finalized).toEqual([result.messages[1]]);
+    expect(result.messages[2]).toEqual({
+      ...apiPending,
+      runStatus: 'canceled',
+      endedAt: stoppedAt,
+    });
+    expect(result.messages[3]).toBe(historicalWithoutStatus);
+    expect(result.finalized).toEqual([result.messages[1], result.messages[2]]);
   });
 
   it('marks a recoverable daemon run as failed when the run status can no longer be fetched', async () => {
