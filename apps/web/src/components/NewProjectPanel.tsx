@@ -970,7 +970,13 @@ function PlatformPicker({
           <Icon name="chevron-down" size={12} />
         </button>
         {open ? (
-          <div className="platform-dropdown-menu" id={listboxId} role="listbox" aria-label="Target platforms">
+          <div
+            className="platform-dropdown-menu"
+            id={listboxId}
+            role="listbox"
+            aria-label="Target platforms"
+            aria-multiselectable="true"
+          >
             {DESIGN_PLATFORMS.map((option) => {
               const active = value.includes(option.value);
               return (

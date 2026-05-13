@@ -177,6 +177,25 @@ describe('NewProjectPanel design system defaults', () => {
     expect(payload.metadata).not.toHaveProperty('includeOsWidgets');
   });
 
+  it('marks the target platform dropdown as a multi-select listbox', () => {
+    render(
+      <NewProjectPanel
+        skills={skills}
+        designSystems={designSystems}
+        defaultDesignSystemId="clay"
+        templates={[]}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Responsive web/i }));
+
+    expect(screen.getByRole('listbox', { name: 'Target platforms' }).getAttribute('aria-multiselectable')).toBe(
+      'true',
+    );
+  });
+
   it('clears design system metadata when freeform is selected in multi mode', () => {
     const onCreate = vi.fn();
     render(
