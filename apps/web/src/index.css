@@ -1917,6 +1917,31 @@ code {
   padding-right: calc(var(--modal-padding) + 56px);
 }
 
+/* Compact settings header: place subtitle on the same line as the h2
+   so opening the dialog doesn't burn 2-3 rows of header height. The
+   row uses baseline alignment so the smaller subtitle sits at the
+   h2 baseline and wraps to its own line on narrow viewports. The
+   welcome hero variant is unaffected — it keeps the stacked layout. */
+.modal-settings .modal-head-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 16px;
+  row-gap: 4px;
+}
+.modal-settings .modal-head-line > h2 {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.modal-settings .modal-head-line > .subtitle {
+  margin: 0;
+  flex: 1 1 240px;
+  font-size: 12.5px;
+  /* Override the 72ch cap from the stacked variant so the subtitle
+     can take the full remaining inline width before wrapping. */
+  max-width: none;
+}
+
 /* Section-local Save key button for the Composio API key field. We do
    NOT autosave secrets, so this is the explicit gesture. Styled as a
    primary button to stand out next to the password input + ghost
@@ -2302,6 +2327,17 @@ code {
 .seg-btn.active .seg-title { font-weight: 600; }
 .seg-btn .seg-meta { display: none; }
 .seg-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Inline variant: title and meta sit on a single row instead of
+   stacking, which saves a row of vertical space inside the
+   execution-mode tabs (Local CLI · 2 installed / BYOK · API provider). */
+.seg-btn--inline {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+  padding-block: 8px;
+}
+.seg-btn--inline > .seg-title { min-width: 0; flex: 0 0 auto; }
+.seg-btn--inline > .seg-meta { min-width: 0; flex: 1 1 auto; }
 
 /* Secondary protocol selector — pill chips, wraps to multiple rows */
 .protocol-chips {
@@ -3585,6 +3621,13 @@ code {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+}
+.media-provider-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .media-provider-name {
   font-size: 13px;
@@ -3673,6 +3716,19 @@ code {
   max-width: 100%;
   min-width: 0;
 }
+/*
+  Section-head action buttons (Reload, Test, Rescan, Fetch models, …)
+  must read on a single line. Without an explicit nowrap they wrap when
+  the section title + hint take most of the row, producing label
+  fragments like "Reload from / daemon" that look broken. flex-shrink:0
+  keeps the button at its content width even when the description gets
+  long; long button labels are then guarded by their own copy budget.
+*/
+.section-head > button,
+.section-head .section-head-actions > button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .section-head h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
 .section-head .hint { margin-top: 2px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
@@ -3751,6 +3807,22 @@ code {
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
+/* Test feedback row injected into the agent grid right after the
+   tested/selected card. Spans both columns so the result reads as a
+   continuation of that card's row, instead of a top-of-section banner
+   that pushes the grid down on every Test/Rescan click. */
+.agent-test-result-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-test-result-row > .settings-test-status {
+  margin: 0;
+}
+.agent-test-result-row > .settings-test-actions {
+  margin-top: 0;
+}
 .agent-card {
   display: flex;
   align-items: center;
@@ -3793,6 +3865,16 @@ code {
   gap: 6px 10px;
   margin-top: 3px;
 }
+/* Inline variant: links sit to the right of the agent name as a sibling
+   of .agent-card-body, so unavailable cards collapse to a single row
+   (no "not installed" label, no version meta) and the long tail of
+   unavailable adapters shrinks. */
+.agent-card-actions--inline {
+  margin-top: 0;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+}
 .agent-card-link {
   font-size: 11px;
   font-weight: 500;
@@ -3804,6 +3886,34 @@ code {
   color: var(--text);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+/* Docs link: secondary affordance, plain muted text. Sits to the left
+   of the Install ghost button so the primary "do this" action keeps the
+   right edge. Hover toggles the underline only — no background, no
+   color change — to keep visual weight low. */
+.agent-card-link--muted {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.agent-card-link--muted:hover {
+  color: var(--text);
+}
+/* Install link: primary affordance for an unavailable card, styled as
+   a ghost button (transparent + outlined) so it reads as a real
+   actionable target rather than yet another text link. */
+.agent-card-link--ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+}
+.agent-card-link--ghost:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+  text-decoration: none;
 }
 .agent-install-path-hint {
   margin-top: 10px;
@@ -3834,6 +3944,13 @@ code {
   line-height: 1.35;
 }
 .agent-card-meta .muted { color: var(--text-soft); font-style: italic; }
+.agent-model-row-head {
+  font-size: 12px;
+  color: var(--text);
+}
+.agent-model-row-head strong {
+  font-weight: 600;
+}
 .agent-model-row {
   display: flex;
   flex-direction: column;
@@ -3841,7 +3958,28 @@ code {
   padding: 12px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  background: var(--bg-panel);
+}
+.agent-model-row select,
+.agent-model-row input,
+.agent-cli-env select,
+.agent-cli-env input,
+.settings-section-byok select,
+.settings-section-byok input {
+  background-color: var(--bg-subtle);
+}
+/*
+  Generic Settings card — wraps a single panel of related controls in a
+  white-on-soft-border container so users get an obvious "this lump of
+  fields belongs together" boundary instead of a long flat scroll. Used
+  by the BYOK form, the Custom instructions block, the Memory list, and
+  any future Settings section that should read as a card.
+*/
+.settings-section-card {
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
 }
 .agent-model-row .field { gap: 4px; }
 .agent-model-row .field-label {
@@ -3852,26 +3990,50 @@ code {
 }
 .agent-model-row .hint { margin: 0; font-size: 11.5px; }
 .agent-cli-env {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
 }
-.agent-cli-env-head {
+.agent-cli-env-summary {
+  list-style: none;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
 }
-.agent-cli-env-head h4 {
-  margin: 0;
-  font-size: 12px;
+.agent-cli-env-summary::-webkit-details-marker {
+  display: none;
+}
+.agent-cli-env-summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+.agent-cli-env[open] > .agent-cli-env-summary::before {
+  transform: rotate(90deg);
+}
+.agent-cli-env-summary-title {
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
-.agent-cli-env-head .hint { margin: 0; font-size: 11.5px; }
+.agent-cli-env-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.agent-cli-env-body .hint {
+  margin: 0;
+  font-size: 11.5px;
+}
 .agent-cli-env-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11166,6 +11328,19 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
   border: 1px solid color-mix(in srgb, #1f9d55 28%, var(--border));
   font-variant-numeric: tabular-nums;
 }
+/*
+ * Inline variant lives next to a label on the same row instead of taking
+ * its own line. We also drop the green "success" treatment because the
+ * media-provider row already has a green "Integrated" badge — two green
+ * pills in one row read as duplicate state. Neutral muted gray keeps it
+ * legible as metadata without competing for attention.
+ */
+.field-status-badge--inline {
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  font-weight: 500;
+}
 /* ---------- Composio API key skeleton ----------
    The Composio config is daemon-backed, so on first paint after a
    restart there is a window where the section renders empty even
@@ -12437,21 +12612,25 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
   align-items: center;
 }
 .filter-pill:hover { border-color: var(--border-strong); color: var(--text); }
+/*
+  Selected filter pill — quiet "I am the chosen one" treatment, NOT a CTA.
+  Earlier the active pill borrowed the full `--accent` fill, which read as
+  a primary button competing with the real action ("+ New memory") next to
+  it. Users would mis-read the count (e.g. "All 0") as a clickable big
+  orange button. We now keep the selection bordered + slightly weighted so
+  it still looks "on" but stops shouting; the lone primary button on the
+  right keeps its monopoly on the accent color.
+*/
 .filter-pill.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+  color: var(--text);
+  font-weight: 600;
 }
-/* The global `button:hover:not(:disabled)` rule (specificity 0,2,1) is more
-   specific than `.filter-pill.active` (0,2,0), so without an explicit
-   active-hover rule the active pill loses its accent background on hover and
-   the white label drops onto a cream `--bg-subtle` background — invisible.
-   This rule (0,3,0) wins and keeps the accent treatment, swapping in
-   `--accent-hover` for a subtle hover shift. */
 .filter-pill.active:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: white;
+  background: var(--bg-muted);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 .filter-pill-count {
   font-size: 11px;
@@ -16116,7 +16295,35 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
-  padding: 32px 0;
+  /* Tinted fill so the empty state reads as its own slot inside the
+     card. Without it the message floats in the same white as the card
+     itself and looks like a layout gap rather than an intentional
+     "you have nothing here yet" panel. */
+  padding: 28px 24px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.library-empty-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.library-empty-hint {
+  margin: 0;
+  font-size: 12px;
+  max-width: 420px;
+  line-height: 1.5;
+}
+.library-empty-hint code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 1px 6px;
+  background: var(--bg-subtle);
+  border-radius: 4px;
 }
 
 /* Memory section: warning banner shown when the memory feature is
@@ -16148,9 +16355,36 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 
 /* Memory section: monospace path showing where the memory files live on
    disk. `break-all` so even long absolute paths fit inside the panel. */
-.memory-root-dir {
-  word-break: break-all;
-  font-size: 11px;
+.memory-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/*
+  Tiny info button anchored to the Memory title. Hover surfaces the
+  storage path via the native tooltip; a click copies it to the
+  clipboard. Sized to the type so it sits as a quiet glyph rather than
+  a clickable affordance — the hover affordance + copy flash do all
+  the discovery work without a permanent string of /Users/... text
+  occupying a whole row in the card.
+*/
+.memory-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: help;
+  border-radius: 50%;
+  transition: color 120ms ease, background 120ms ease;
+}
+.memory-info-btn:hover {
+  color: var(--text);
+  background: var(--bg-subtle);
 }
 
 .memory-details-summary {
@@ -16169,10 +16403,16 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 }
 
 .memory-details-summary::before {
+  /* Caret used to render at 10px in --text-faint (#aaa). On hi-dpi
+     panels that's a fuzzy speck the user can't even tell points right.
+     Bumping to 13px (matches the summary text weight) and switching to
+     --text-muted gives the disclosure marker enough mass to be obvious
+     without dominating the row. */
   content: '▸';
-  flex: 0 0 1em;
-  color: var(--text-faint, #aaa);
-  font-size: 10px;
+  flex: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
   transition: transform 120ms ease, color 120ms ease;
 }
 
@@ -16182,7 +16422,7 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 
 .memory-details-summary:hover::before,
 .memory-details-summary:focus-visible::before {
-  color: var(--text-muted, #888);
+  color: var(--text);
 }
 
 .memory-details-summary:focus-visible {

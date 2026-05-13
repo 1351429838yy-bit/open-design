@@ -55,7 +55,7 @@ async function seedSettingsBase(page: Page) {
 
 async function openSettings(page: Page) {
   await page.goto('/');
-  await page.getByTitle('Configure execution mode').click();
+  await page.getByTitle('Execution mode').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   return dialog;

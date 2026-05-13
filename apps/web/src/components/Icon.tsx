@@ -26,6 +26,7 @@ type IconName =
   | 'history'
   | 'image'
   | 'import'
+  | 'info'
   | 'kanban'
   | 'languages'
   | 'link'
@@ -258,6 +259,14 @@ export function Icon({ name, size = 14, strokeWidth = 1.6, ...rest }: Props) {
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <path d="m17 8-5-5-5 5" />
           <path d="M12 3v12" />
+        </svg>
+      );
+    case 'info':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
       );
     case 'kanban':

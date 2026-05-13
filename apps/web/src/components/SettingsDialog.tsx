@@ -761,6 +761,15 @@ export function SettingsDialog({
     agentChoiceForTest?.reasoning,
     cfg.agentCliEnv,
   ]);
+  // Rescan notices are list-level feedback for a one-shot action and
+  // shouldn't linger in the content stream. After 6s, fade them out so
+  // repeated Rescan clicks don't pile up; the next click resets the
+  // notice immediately, so this only affects "user moved on" cases.
+  useEffect(() => {
+    if (!agentRescanNotice) return;
+    const id = window.setTimeout(() => setAgentRescanNotice(null), 6000);
+    return () => window.clearTimeout(id);
+  }, [agentRescanNotice]);
   useEffect(() => {
     providerTestRevisionRef.current += 1;
     setProviderTestState((state) =>
@@ -1406,8 +1415,10 @@ export function SettingsDialog({
 
   // Header title/subtitle follow the active sidebar section so the dialog
   // header always reflects what the user is looking at, instead of being
-  // pinned to "Execution & model" copy that only described one of the
-  // 11 sections this dialog now hosts.
+  // pinned to one section's copy. The execution section's header doubles
+  // as the section heading — there is no inner h3 inside the Local CLI /
+  // BYOK content so "Local CLI" only renders once (in the seg-control tab),
+  // not twice (heading + tab).
   const sectionHeader: Record<SettingsSection, { title: string; subtitle: string }> = {
     execution: { title: t('settings.title'), subtitle: t('settings.subtitle') },
     media: { title: t('settings.mediaProviders'), subtitle: t('settings.mediaProvidersHint') },
@@ -1500,8 +1511,11 @@ export function SettingsDialog({
             </>
           ) : (
             <>
-              <h2>{activeHeader.title}</h2>
-              <p className="subtitle">{activeHeader.subtitle}</p>
+              <span className="kicker">{t('settings.kicker')}</span>
+              <div className="modal-head-line">
+                <h2>{activeHeader.title}</h2>
+                <p className="subtitle">{activeHeader.subtitle}</p>
+              </div>
             </>
           )}
         </header>
@@ -1698,7 +1712,10 @@ export function SettingsDialog({
                   type="button"
                   role="tab"
                   aria-selected={cfg.mode === 'daemon'}
-                  className={'seg-btn' + (cfg.mode === 'daemon' ? ' active' : '')}
+                  className={
+                    'seg-btn seg-btn--inline' +
+                    (cfg.mode === 'daemon' ? ' active' : '')
+                  }
                   disabled={!daemonLive}
                   onClick={() => setMode('daemon')}
                   title={
@@ -1718,7 +1735,10 @@ export function SettingsDialog({
                   type="button"
                   role="tab"
                   aria-selected={cfg.mode === 'api'}
-                  className={'seg-btn' + (cfg.mode === 'api' ? ' active' : '')}
+                  className={
+                    'seg-btn seg-btn--inline' +
+                    (cfg.mode === 'api' ? ' active' : '')
+                  }
                   onClick={() => setMode('api')}
                 >
                   <span className="seg-title">{t('settings.modeApiMeta')}</span>
@@ -1759,7 +1779,6 @@ export function SettingsDialog({
             <section className="settings-section">
               <div className="section-head">
                 <div>
-                  <h3>{t('settings.localCli')}</h3>
                   <p className="hint">{t('settings.codeAgentHint')}</p>
                 </div>
                 <div className="section-head-actions">
@@ -1832,57 +1851,6 @@ export function SettingsDialog({
                     : t('settings.rescanFailed')}
                 </p>
               ) : null}
-              {agentTestState.status === 'running' ? (
-                <p
-                  className="settings-test-status running"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {t('settings.testRunning')}
-                </p>
-              ) : agentTestState.status === 'done' ? (
-                <>
-                  <p
-                    className={
-                      'settings-test-status ' +
-                      testStatusVariant(agentTestState.result)
-                    }
-                    role={agentTestState.result.ok ? 'status' : 'alert'}
-                  >
-                    {renderTestMessage(agentTestState.result, 'cli')}
-                  </p>
-                  {cfg.agentId === 'codex' && (() => {
-                    const repair = codexPathRepairState(agentTestState.result);
-                    if (!repair) return null;
-                    const codexStrings = codexPathStrings(locale);
-                    return (
-                      <div className="settings-test-actions">
-                        <span className="settings-test-actions-hint">
-                          {codexStrings.repairHint}
-                        </span>
-                        <div className="settings-test-actions-row">
-                          {repair.canUseDetected ? (
-                            <button
-                              type="button"
-                              className="settings-test-btn"
-                              onClick={() => applyCodexDetectedPath(repair.detectedPath)}
-                            >
-                              {codexStrings.useDetected}
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="ghost icon-btn settings-rescan-btn"
-                            onClick={clearCodexCustomPath}
-                          >
-                            {codexStrings.clearCustom}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </>
-              ) : null}
               {agents.length === 0 ? (
                 <div className="empty-card">
                   {t('settings.noAgentsDetected')}
@@ -1890,101 +1858,201 @@ export function SettingsDialog({
               ) : (
                 <>
                   <div className="agent-grid">
-                    {agents.map((a) => {
+                    {agents.flatMap((a) => {
                       const active = cfg.agentId === a.id;
-                      if (a.available) {
-                        return (
-                          <button
-                            type="button"
-                            key={a.id}
-                            className={
-                              'agent-card' + (active ? ' active' : '')
-                            }
-                            onClick={() => {
-                              trackSettingsClickCliProviderCard(analytics.track, {
-                                page: 'settings',
-                                area: 'execution_model',
-                                element: 'cli_provider_card',
-                                action: 'select_cli_provider',
-                                cli_provider_id: agentIdToTracking(a.id),
-                                install_status: a.available ? 'installed' : 'not_installed',
-                                is_selected: !active,
-                              });
-                              setCfg((c) => ({ ...c, agentId: a.id }));
-                            }}
-                            aria-pressed={active}
-                          >
-                            <AgentIcon id={a.id} size={32} />
-                            <div className="agent-card-body">
-                              <div className="agent-card-name">{a.name}</div>
-                              <div className="agent-card-meta">
-                                {a.version ? (
-                                  <span title={a.path ?? ''}>{a.version}</span>
-                                ) : (
-                                  <span title={a.path ?? ''}>
-                                    {t('common.installed')}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <span
-                              className={
-                                'status-dot' + (active ? ' active' : '')
-                              }
-                              aria-hidden="true"
-                            />
-                          </button>
-                        );
-                      }
-                      const installUrl = sanitizeHttpsUrl(a.installUrl);
-                      const docsUrl = sanitizeHttpsUrl(a.docsUrl);
-                      const hasLinks = Boolean(installUrl || docsUrl);
-                      const cardLabel = `${a.name} · ${t('common.notInstalled')}`;
-                      return (
-                        <div
+                      const cardEl = a.available ? (
+                        <button
+                          type="button"
                           key={a.id}
-                          className="agent-card disabled agent-card-unavailable"
-                          role="group"
-                          aria-label={cardLabel}
+                          className={
+                            'agent-card' + (active ? ' active' : '')
+                          }
+                          onClick={() => {
+                            trackSettingsClickCliProviderCard(analytics.track, {
+                              page: 'settings',
+                              area: 'execution_model',
+                              element: 'cli_provider_card',
+                              action: 'select_cli_provider',
+                              cli_provider_id: agentIdToTracking(a.id),
+                              install_status: a.available ? 'installed' : 'not_installed',
+                              is_selected: !active,
+                            });
+                            setCfg((c) => ({ ...c, agentId: a.id }));
+                          }}
+                          aria-pressed={active}
                         >
                           <AgentIcon id={a.id} size={32} />
                           <div className="agent-card-body">
                             <div className="agent-card-name">{a.name}</div>
                             <div className="agent-card-meta">
-                              <span className="muted">
-                                {t('common.notInstalled')}
-                              </span>
+                              {a.version ? (
+                                <span title={a.path ?? ''}>{a.version}</span>
+                              ) : (
+                                <span title={a.path ?? ''}>
+                                  {t('common.installed')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span
+                            className={
+                              'status-dot' + (active ? ' active' : '')
+                            }
+                            aria-hidden="true"
+                          />
+                        </button>
+                      ) : (() => {
+                        const installUrl = sanitizeHttpsUrl(a.installUrl);
+                        const docsUrl = sanitizeHttpsUrl(a.docsUrl);
+                        const hasLinks = Boolean(installUrl || docsUrl);
+                        const cardLabel = `${a.name} · ${t('common.notInstalled')}`;
+                        // Not-installed cards intentionally drop the "not
+                        // installed" label and the explicit version row.
+                        // Install / Docs links sit to the right of the name
+                        // so the card collapses to a single row, which keeps
+                        // installed CLIs (taller, with version meta) visually
+                        // dominant and shrinks the long tail of unavailable
+                        // adapters. The card's overall opacity + cardLabel
+                        // still convey unavailability for sighted + screen
+                        // reader users.
+                        return (
+                          <div
+                            key={a.id}
+                            className="agent-card disabled agent-card-unavailable"
+                            role="group"
+                            aria-label={cardLabel}
+                          >
+                            <AgentIcon id={a.id} size={40} />
+                            <div className="agent-card-body">
+                              <div className="agent-card-name">{a.name}</div>
                             </div>
                             {hasLinks ? (
-                              <div className="agent-card-actions">
-                                {installUrl ? (
-                                  <a
-                                    href={installUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="agent-card-link"
-                                  >
-                                    {t('settings.agentInstall.install')}
-                                  </a>
-                                ) : null}
+                              <div className="agent-card-actions agent-card-actions--inline">
                                 {docsUrl ? (
                                   <a
                                     href={docsUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="agent-card-link"
+                                    className="agent-card-link agent-card-link--muted"
                                   >
                                     {t('settings.agentInstall.docs')}
+                                  </a>
+                                ) : null}
+                                {installUrl ? (
+                                  <a
+                                    href={installUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="agent-card-link agent-card-link--ghost"
+                                  >
+                                    {t('settings.agentInstall.install')}
                                   </a>
                                 ) : null}
                               </div>
                             ) : null}
                           </div>
-                        </div>
-                      );
+                        );
+                      })();
+                      // Render Test feedback (running spinner / done result)
+                      // immediately after the selected card so the result is
+                      // visually bound to the card it tested. The result row
+                      // spans both grid columns via `.agent-test-result-row`.
+                      if (
+                        active &&
+                        a.available &&
+                        agentTestState.status !== 'idle'
+                      ) {
+                        const resultRow = (
+                          <div
+                            key={`${a.id}__test-result`}
+                            className="agent-test-result-row"
+                          >
+                            {agentTestState.status === 'running' ? (
+                              <p
+                                className="settings-test-status running"
+                                role="status"
+                                aria-live="polite"
+                              >
+                                {t('settings.testRunning')}
+                              </p>
+                            ) : (
+                              <>
+                                <p
+                                  className={
+                                    'settings-test-status ' +
+                                    testStatusVariant(agentTestState.result)
+                                  }
+                                  role={
+                                    agentTestState.result.ok
+                                      ? 'status'
+                                      : 'alert'
+                                  }
+                                >
+                                  {renderTestMessage(
+                                    agentTestState.result,
+                                    'cli',
+                                  )}
+                                </p>
+                                {cfg.agentId === 'codex' && (() => {
+                                  const repair = codexPathRepairState(
+                                    agentTestState.result,
+                                  );
+                                  if (!repair) return null;
+                                  const codexStrings = codexPathStrings(locale);
+                                  return (
+                                    <div className="settings-test-actions">
+                                      <span className="settings-test-actions-hint">
+                                        {codexStrings.repairHint}
+                                      </span>
+                                      <div className="settings-test-actions-row">
+                                        {repair.canUseDetected ? (
+                                          <button
+                                            type="button"
+                                            className="settings-test-btn"
+                                            onClick={() =>
+                                              applyCodexDetectedPath(
+                                                repair.detectedPath,
+                                              )
+                                            }
+                                          >
+                                            {codexStrings.useDetected}
+                                          </button>
+                                        ) : null}
+                                        <button
+                                          type="button"
+                                          className="ghost icon-btn settings-rescan-btn"
+                                          onClick={clearCodexCustomPath}
+                                        >
+                                          {codexStrings.clearCustom}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </>
+                            )}
+                          </div>
+                        );
+                        return [cardEl, resultRow];
+                      }
+                      return [cardEl];
                     })}
                   </div>
-                  {agents.some((x) => !x.available) ? (
+                  {/*
+                    Show the install guide only when the user has *no*
+                    working agent picked yet. Older logic surfaced it
+                    whenever any agent on the support list was missing,
+                    which fired for almost everyone (few people install
+                    all 14 supported CLIs) — the four-step quickstart
+                    then sat between the agent grid and the model picker
+                    forever, even after the user had successfully picked
+                    Claude Code months ago. Once a working agent is
+                    selected, the guide has done its job and only adds
+                    noise.
+                  */}
+                  {!agents.find(
+                    (a) => a.id === cfg.agentId && a.available,
+                  ) ? (
                     <div className="agent-install-guide">
                       <p className="hint agent-install-path-hint">
                         {t('settings.agentInstall.pathHint')}
@@ -2042,44 +2110,70 @@ export function SettingsDialog({
                   : modelValue;
                 return (
                   <div className="agent-model-row">
+                    {/*
+                      Attribution header — when the user has scrolled past
+                      the agent grid, the Claude Code / Codex card is no
+                      longer in view, so the model picker becomes
+                      ambiguous ("which CLI's model am I editing?").
+                      An explicit "Model for <agent>" line resolves that
+                      without forcing the user to scroll back up. Inline
+                      English; other locales pick this up at PR-time
+                      translation sweep.
+                    */}
+                    <div className="agent-model-row-head">
+                      Model for: <strong>{selected.name}</strong>
+                    </div>
                     {hasModels ? (
-                      <label className="field">
-                        <span className="field-label">
-                          {t('settings.modelPicker')}
-                        </span>
-                        <select
-                          value={selectValue}
-                          onChange={(e) => {
-                            if (e.target.value === CUSTOM_MODEL_SENTINEL) {
-                              // Switching to "Custom…" should clear the
-                              // value so the input below opens empty for
-                              // typing. Keep an explicit edit-mode flag so
-                              // intermediate values like `gpt-5` do not
-                              // collapse the custom input while typing
-                              // `gpt-5.5`.
-                              setAgentCustomModelIds((prev) => {
-                                const next = new Set(prev);
-                                next.add(selected.id);
-                                return next;
-                              });
-                              setChoice({ model: '' });
-                            } else {
-                              setAgentCustomModelIds((prev) => {
-                                if (!prev.has(selected.id)) return prev;
-                                const next = new Set(prev);
-                                next.delete(selected.id);
-                                return next;
-                              });
-                              setChoice({ model: e.target.value });
-                            }
-                          }}
-                        >
-                          {renderModelOptions(selected.models!)}
-                          <option value={CUSTOM_MODEL_SENTINEL}>
-                            {t('settings.modelCustom')}
-                          </option>
-                        </select>
-                      </label>
+                      <>
+                        <label className="field">
+                          <span className="field-label">
+                            {t('settings.modelPicker')}
+                          </span>
+                          <select
+                            value={selectValue}
+                            onChange={(e) => {
+                              if (e.target.value === CUSTOM_MODEL_SENTINEL) {
+                                // Switching to "Custom…" should clear the
+                                // value so the input below opens empty for
+                                // typing. Keep an explicit edit-mode flag so
+                                // intermediate values like `gpt-5` do not
+                                // collapse the custom input while typing
+                                // `gpt-5.5`.
+                                setAgentCustomModelIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.add(selected.id);
+                                  return next;
+                                });
+                                setChoice({ model: '' });
+                              } else {
+                                setAgentCustomModelIds((prev) => {
+                                  if (!prev.has(selected.id)) return prev;
+                                  const next = new Set(prev);
+                                  next.delete(selected.id);
+                                  return next;
+                                });
+                                setChoice({ model: e.target.value });
+                              }
+                            }}
+                          >
+                            {renderModelOptions(selected.models!)}
+                            <option value={CUSTOM_MODEL_SENTINEL}>
+                              {t('settings.modelCustom')}
+                            </option>
+                          </select>
+                        </label>
+                        {/*
+                          Hint sits with its own field so the user reads
+                          "Default vs Custom…" right next to the dropdown
+                          that exposes those options. Older layouts parked
+                          this paragraph at the bottom of the section, past
+                          the Memory picker, where it got mistaken for
+                          memory documentation.
+                        */}
+                        <p className="hint agent-model-row-hint">
+                          {t('settings.modelPickerHint')}
+                        </p>
+                      </>
                     ) : null}
                     {customActive ? (
                       <label className="field">
@@ -2129,43 +2223,94 @@ export function SettingsDialog({
                           : []
                       }
                     />
-                    <p className="hint">{t('settings.modelPickerHint')}</p>
                   </div>
                 );
               })()}
-              <div className="agent-cli-env">
-                <div className="agent-cli-env-head">
-                  <h4>{t('settings.cliEnvTitle')}</h4>
-                  <p className="hint">{t('settings.cliEnvHint')}</p>
-                </div>
-                <div className="agent-cli-env-grid">
-                  {AGENT_CLI_ENV_FIELDS.map((field) => (
-                    <label className="field" key={`${field.agentId}:${field.envKey}`}>
-                      <span className="field-label">{t(field.labelKey)}</span>
-                      <input
-                        type={'secret' in field && field.secret ? 'password' : 'text'}
-                        value={cfg.agentCliEnv?.[field.agentId]?.[field.envKey] ?? ''}
-                        placeholder={field.placeholder}
-                        spellCheck={false}
-                        autoComplete="off"
-                        onChange={(e) =>
-                          setCfg((c) =>
-                            updateAgentCliEnvValue(
-                              c,
-                              field.agentId,
-                              field.envKey,
-                              e.target.value,
-                            ),
-                          )
-                        }
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
+              {(() => {
+                /*
+                  Per-agent CLI environment overrides — proxy URLs, custom
+                  config dirs, and a binary path override. The previous
+                  layout listed every supported agent's variables in one
+                  long always-expanded block; for users on Claude Code
+                  the Codex fields were just visual filler (and vice
+                  versa), and the section hijacked Settings real estate
+                  on every open even though nine in ten users never
+                  touch it. Now: filtered to the *currently selected*
+                  agent only, and folded into a collapsed disclosure
+                  that opens to "Advanced: proxy & custom paths" — power
+                  users who route through LiteLLM or installed the
+                  binary out-of-PATH still have one click access; new
+                  users no longer wonder "are these fields I forgot to
+                  fill in?".
+                */
+                const cliEnvFields = AGENT_CLI_ENV_FIELDS.filter(
+                  (field) => field.agentId === cfg.agentId,
+                );
+                if (cliEnvFields.length === 0) return null;
+                return (
+                  <details className="agent-cli-env">
+                    <summary className="agent-cli-env-summary">
+                      <span className="agent-cli-env-summary-title">
+                        {t('settings.cliEnvTitle')}
+                      </span>
+                    </summary>
+                    <div className="agent-cli-env-body">
+                      <p className="hint">{t('settings.cliEnvHint')}</p>
+                      <div className="agent-cli-env-grid">
+                        {cliEnvFields.map((field) => (
+                          <label
+                            className="field"
+                            key={`${field.agentId}:${field.envKey}`}
+                          >
+                            <span className="field-label">
+                              {t(field.labelKey)}
+                            </span>
+                            <input
+                              type={
+                                'secret' in field && field.secret
+                                  ? 'password'
+                                  : 'text'
+                              }
+                              value={
+                                cfg.agentCliEnv?.[field.agentId]?.[
+                                  field.envKey
+                                ] ?? ''
+                              }
+                              placeholder={field.placeholder}
+                              spellCheck={false}
+                              autoComplete="off"
+                              onChange={(e) =>
+                                setCfg((c) =>
+                                  updateAgentCliEnvValue(
+                                    c,
+                                    field.agentId,
+                                    field.envKey,
+                                    e.target.value,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </details>
+                );
+              })()}
             </section>
           ) : (
-            <section className="settings-section">
+            /*
+              BYOK panel — wrap the per-protocol form in a bordered card so
+              the chips above (Anthropic / OpenAI / Azure / Gemini / Ollama)
+              visually own the content below. Without the card, the chip
+              row and the form looked like two unrelated stripes; users
+              had no anchor for "this is what I configured for the active
+              tab", and switching tabs felt like the whole right column
+              just reshuffled. The card lives on the same white-with-soft-
+              border pattern as `.agent-model-row` so the two BYOK / CLI
+              panels feel like the same family.
+            */
+            <section className="settings-section settings-section-card settings-section-byok">
               <div className="section-head">
                 <div>
                   <h3>{API_PROTOCOL_LABELS[apiProtocol]}</h3>
@@ -2559,7 +2704,7 @@ export function SettingsDialog({
 
           {activeSection === 'memory' ? (
             <>
-              <section className="settings-section">
+              <section className="settings-section settings-section-card">
                 <div className="section-head">
                   <div>
                     <h3>{t('settings.customInstructionsTitle')}</h3>
@@ -4073,12 +4218,30 @@ function MediaProvidersSection({
             <div key={provider.id} className={`media-provider-row${provider.integrated ? '' : ' pending'}`}>
               <div className="media-provider-head">
                 <div className="media-provider-meta">
-                  <span className="media-provider-name">{provider.label}</span>
-                  {isSavedState ? (
-                    <span className="field-status-badge" title={t('settings.connectorsSavedTitle')}>
-                      {tail ? t('settings.connectorsSavedWithTail', { tail }) : t('settings.connectorsSaved')}
-                    </span>
-                  ) : null}
+                  {/*
+                    Provider name + "Saved" badge sit on a single row.
+                    The badge used to render below the name with a green
+                    success-pill treatment, which clashed with the green
+                    "Integrated" badge on the right of the same row and
+                    pushed the model hint two lines down. Inline + a
+                    neutral muted treatment keeps the row scannable: green
+                    means "we support this", blue means "you configured
+                    it", gray means "your key is persisted" — three
+                    distinct hues, three distinct meanings.
+                  */}
+                  <div className="media-provider-name-row">
+                    <span className="media-provider-name">{provider.label}</span>
+                    {isSavedState ? (
+                      <span
+                        className="field-status-badge field-status-badge--inline"
+                        title={t('settings.connectorsSavedTitle')}
+                      >
+                        {tail
+                          ? t('settings.connectorsSavedWithTail', { tail })
+                          : t('settings.connectorsSaved')}
+                      </span>
+                    ) : null}
+                  </div>
                   <span className="media-provider-hint">{provider.hint}</span>
                 </div>
                 <div className="media-provider-badges">

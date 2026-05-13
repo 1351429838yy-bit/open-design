@@ -262,7 +262,7 @@ function formatDuration(record: MemoryExtractionRecord): string | null {
   return `${Math.round(ms / 1000)}s`;
 }
 
-type FlashKind = 'created' | 'saved' | 'deleted' | 'indexSaved';
+type FlashKind = 'created' | 'saved' | 'deleted' | 'indexSaved' | 'pathCopied';
 
 export function MemorySection() {
   const t = useT();
@@ -305,9 +305,33 @@ export function MemorySection() {
       saved: t('settings.memoryFlashSaved'),
       deleted: t('settings.memoryFlashDeleted'),
       indexSaved: t('settings.memoryFlashIndexSaved'),
+      // Inline English; PR-time translation sweep can hoist this into
+      // the dictionary alongside the other flash labels.
+      pathCopied: 'Path copied',
     }),
     [t],
   );
+
+  const onCopyPath = useCallback(async () => {
+    if (!rootDir) return;
+    try {
+      await navigator.clipboard.writeText(rootDir);
+      fireFlash('pathCopied');
+    } catch {
+      // Some sandboxed contexts block clipboard writes silently. Fall
+      // back to a transient input so the user can still grab the path
+      // with a manual select-all + copy.
+      const input = document.createElement('input');
+      input.value = rootDir;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      fireFlash('pathCopied');
+    }
+  }, [rootDir, fireFlash]);
 
   const TYPE_LABEL: Record<MemoryType, string> = useMemo(
     () => ({
@@ -540,10 +564,36 @@ export function MemorySection() {
   }, [reloadExtractions]);
 
   return (
-    <section className={`settings-section${enabled ? '' : ' is-disabled'}`}>
+    <section
+      className={`settings-section settings-section-card${enabled ? '' : ' is-disabled'}`}
+    >
       <div className="section-head">
         <div>
-          <h3>{t('settings.memory')}</h3>
+          <h3 className="memory-title-row">
+            <span>{t('settings.memory')}</span>
+            {/*
+              Storage path used to render as a permanently-visible
+              <code>/Users/.../.od/memory</code> line in the body. Most
+              users only need this once (to peek at the markdown files)
+              and then never again, so the line was pure noise after the
+              first glance. We tucked it behind an info button next to
+              the title: native tooltip on hover reveals the full path,
+              and a click copies it to clipboard with a "Path copied"
+              flash. Inline English for the aria-label; PR-time
+              translation sweep can lift it later.
+            */}
+            {rootDir ? (
+              <button
+                type="button"
+                className="memory-info-btn"
+                onClick={() => void onCopyPath()}
+                title={`${rootDir}\nClick to copy`}
+                aria-label="Memory storage path — click to copy"
+              >
+                <Icon name="info" size={13} />
+              </button>
+            ) : null}
+          </h3>
           <p className="hint">{t('settings.memoryDescription')}</p>
         </div>
         <label
@@ -572,12 +622,6 @@ export function MemorySection() {
           <strong>{t('settings.memoryNoProviderBannerTitle')}</strong> —{' '}
           {t('settings.memoryNoProviderBannerBody')}
         </div>
-      ) : null}
-
-      {rootDir ? (
-        <p className="hint memory-root-dir">
-          <code>{rootDir}</code>
-        </p>
       ) : null}
 
       <div className="library-toolbar is-row">
@@ -804,11 +848,26 @@ export function MemorySection() {
 
       <div className="library-content">
         {filtered.length === 0 ? (
-          <p className="library-empty">
-            {t('settings.memoryEmpty')}{' '}
-            <code>{t('settings.memoryEmptyHintZh')}</code> /{' '}
-            <code>{t('settings.memoryEmptyHintEn')}</code>
-          </p>
+          /*
+            Empty state — the previous one inlined two side-by-side
+            <code> snippets ("记住：用户偏好深色主题 / I prefer dark
+            mode") which read like duelling locales and made the user
+            wonder if the chips were tap-to-prefill or just decorative.
+            We now show one clear "no rows yet" line and a one-sentence
+            primer that explains the mechanism (talk in chat, fact gets
+            extracted) with a single example. Inline English; PR-time
+            translation sweep can lift this into the dictionary.
+          */
+          <div className="library-empty">
+            <p className="library-empty-title">
+              {t('settings.memoryEmpty')}
+            </p>
+            <p className="library-empty-hint">
+              Tell the assistant a fact in chat — e.g.{' '}
+              <code>I prefer dark mode</code> — and it will be saved
+              here automatically.
+            </p>
+          </div>
         ) : (
           TYPES.filter((tt) => grouped.has(tt)).map((type) => (
             <div key={type} className="library-group">
