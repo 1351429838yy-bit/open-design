@@ -1,7 +1,7 @@
 ---
 id: 20260513-optional-content-i18n
 name: Optional Content I18n
-status: designed
+status: implemented
 created: '2026-05-13'
 ---
 
@@ -148,30 +148,38 @@ Flow:
 
 ## Plan
 
-- [ ] Step 1: 调整 localized-content 测试 gate
-  - [ ] Substep 1.1 Implement: 移除或改写 `LOCALIZED_CONTENT_IDS` 对 discovered category / tag 的全量覆盖断言。
-  - [ ] Substep 1.2 Implement: 保留真实资源在 `de` / `fr` / `ru` 下非空显示的 fallback smoke。
-  - [ ] Substep 1.3 Implement: 需要时增加 category / tag fallback 的直接断言，覆盖缺字典时返回原值。
-  - [ ] Substep 1.4 Verify: 运行 `pnpm --filter @open-design/e2e test tests/localized-content.test.ts`。
-- [ ] Step 2: 同步贡献和覆盖文档
-  - [ ] Substep 2.1 Implement: 更新 `docs/skills-contributing.md`，把 featured localized copy 表达为可选增强路径。
-  - [ ] Substep 2.2 Implement: 更新 `docs/testing/e2e-coverage/settings.md` 中 SET-043 / SET-044 的覆盖描述。
-  - [ ] Substep 2.3 Implement: 复核 `docs/design-systems.md` 与新语义一致，必要时微调 wording。
-  - [ ] Substep 2.4 Verify: 人工检查文档中不再把 `de` / `fr` / `ru` 内容翻译描述为内容型贡献的硬性阻塞项。
-- [ ] Step 3: 回归验证
-  - [ ] Substep 3.1 Verify: 运行 `pnpm --filter @open-design/web test`。
-  - [ ] Substep 3.2 Verify: 本地临时新增一个未补 `de` / `fr` / `ru` localized dictionary 的 probe 类内容资源，运行 CI 等价验证，确认通过后移除 probe 内容。
-  - [ ] Substep 3.3 Verify: 运行 `pnpm guard`。
-  - [ ] Substep 3.4 Verify: 运行 `pnpm typecheck`。
+- [x] Step 1: 调整 localized-content 测试 gate
+  - [x] Substep 1.1 Implement: 移除或改写 `LOCALIZED_CONTENT_IDS` 对 discovered category / tag 的全量覆盖断言。
+  - [x] Substep 1.2 Implement: 保留真实资源在 `de` / `fr` / `ru` 下非空显示的 fallback smoke。
+  - [x] Substep 1.3 Implement: 需要时增加 category / tag fallback 的直接断言，覆盖缺字典时返回原值。
+  - [x] Substep 1.4 Verify: 运行 `pnpm --filter @open-design/e2e test tests/localized-content.test.ts`。
+- [x] Step 2: 同步贡献和覆盖文档
+  - [x] Substep 2.1 Implement: 更新 `docs/skills-contributing.md`，把 featured localized copy 表达为可选增强路径。
+  - [x] Substep 2.2 Implement: 更新 `docs/testing/e2e-coverage/settings.md` 中 SET-043 / SET-044 的覆盖描述。
+  - [x] Substep 2.3 Implement: 复核 `docs/design-systems.md` 与新语义一致，必要时微调 wording。
+  - [x] Substep 2.4 Verify: 人工检查文档中不再把 `de` / `fr` / `ru` 内容翻译描述为内容型贡献的硬性阻塞项。
+- [x] Step 3: 回归验证
+  - [x] Substep 3.1 Verify: 运行 `pnpm --filter @open-design/web test`。
+  - [x] Substep 3.2 Verify: 本地临时新增一个未补 `de` / `fr` / `ru` localized dictionary 的 probe 类内容资源，运行 CI 等价验证，确认通过后移除 probe 内容。
+  - [x] Substep 3.3 Verify: 运行 `pnpm guard`。
+  - [x] Substep 3.4 Verify: 运行 `pnpm typecheck`。
 
 ## Notes
 
-<!-- Optional sections — add what's relevant. -->
-
 ### Implementation
 
-<!-- Files created/modified, decisions made during coding, deviations from design -->
+- `e2e/tests/localized-content.test.ts` - 移除 discovered category / tag 对 `LOCALIZED_CONTENT_IDS` 的全量覆盖 gate，保留真实资源可显示 smoke，并新增缺 prompt-template category / tag 字典项时回退源值的直接断言。
+- `apps/web/tests/i18n/content.test.ts` - 补强 prompt-template 未知 category 的 fallback 单元断言。
+- `docs/skills-contributing.md` - 将 localized display copy 调整为 featured skill 的可选增强路径，并说明测试关注可显示资源与 fallback 行为。
+- `docs/testing/e2e-coverage/settings.md` - 将 SET-043 / SET-044 改写为 fallback 展示完整性和可选翻译行为覆盖。
+- `docs/design-systems.md` - 现有 wording 已表达英文 fallback 和可选 localized summary，无需修改。
 
 ### Verification
 
-<!-- How the feature was verified: tests written, manual testing steps, results -->
+- `pnpm --filter @open-design/web test tests/i18n/content.test.ts` - passed。
+- `pnpm --filter @open-design/e2e test tests/localized-content.test.ts` - 初次发现并清理前序 probe 空目录后 passed。
+- 临时新增英文-only skill、design template、design system、prompt template probe，并运行 `pnpm --filter @open-design/e2e test tests/localized-content.test.ts` - passed；随后移除临时 probe 内容。
+- `pnpm --filter @open-design/e2e test tests/localized-content.test.ts` - final passed。
+- `pnpm --filter @open-design/web test` - passed，110 files / 1013 tests。
+- `pnpm guard` - passed。
+- `pnpm typecheck` - passed。
