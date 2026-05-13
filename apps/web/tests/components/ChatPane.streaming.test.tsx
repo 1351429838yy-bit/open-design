@@ -75,6 +75,7 @@ describe('ChatPane streaming state', () => {
 
     render(
       <ChatPane
+        projectKind="prototype"
         messages={messages}
         streaming={false}
         error={null}

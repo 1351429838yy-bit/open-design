@@ -4,6 +4,7 @@ import type { Dict } from '../i18n/types';
 import { projectRawUrl } from '../providers/registry';
 import type { TodoItem } from '../runtime/todos';
 import type { AppConfig, ChatAttachment, ChatCommentAttachment, ChatMessage, ChatMessageFeedbackChange, Conversation, PreviewComment, ProjectFile, ProjectMetadata, SkillSummary } from '../types';
+import type { TrackingProjectKind } from '@open-design/contracts/analytics';
 import { dayKey, dayLabel, exactDateTime, messageTime, relativeTimeLong } from '../utils/chatTime';
 import { commentsToAttachments, simplePositionLabel } from '../comments';
 import { AssistantMessage } from './AssistantMessage';
@@ -198,6 +199,7 @@ interface Props {
   streaming: boolean;
   error: string | null;
   projectId: string | null;
+  projectKind: TrackingProjectKind;
   projectFiles: ProjectFile[];
   sendDisabled?: boolean;
   // Names that exist in the project folder. Tool cards and chips use this
@@ -266,6 +268,7 @@ export function ChatPane({
   sendDisabled = false,
   error,
   projectId,
+  projectKind,
   projectFiles,
   projectFileNames,
   onEnsureProject,
@@ -678,6 +681,8 @@ export function ChatPane({
                         message={m}
                         streaming={messageStreaming}
                         projectId={projectId}
+                        projectKind={projectKind}
+                        conversationId={activeConversationId}
                         projectFileNames={projectFileNames}
                         onRequestOpenFile={onRequestOpenFile}
                         isLast={m.id === lastAssistantId}

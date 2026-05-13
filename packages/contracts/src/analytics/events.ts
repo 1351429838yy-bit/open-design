@@ -22,7 +22,11 @@ export type AnalyticsEventName =
   | 'studio_click'
   | 'run_created'
   | 'run_finished'
-  | 'artifact_export_result';
+  | 'artifact_export_result'
+  | 'assistant_feedback_click'
+  | 'assistant_feedback_reason_view'
+  | 'assistant_feedback_reason_click'
+  | 'assistant_feedback_reason_submit';
 
 // ---- Enums shared across events (CSV wire format) ------------------------
 
@@ -132,6 +136,35 @@ export type TrackingExportFormat =
 export type TrackingRunResult = 'success' | 'failed' | 'cancelled';
 export type TrackingCreateResult = 'success' | 'failed';
 export type TrackingExportResult = 'success' | 'failed' | 'cancelled';
+
+export type TrackingFeedbackRating = 'positive' | 'negative';
+export type TrackingPreviousFeedbackRating = 'positive' | 'negative' | 'none';
+export type TrackingFeedbackAction =
+  | 'submit_feedback_rating'
+  | 'clear_feedback_rating';
+
+// Mirrors ChatMessageFeedbackReasonCode in packages/contracts/src/api/chat.ts.
+// Kept independent so the analytics wire format can evolve without forcing
+// a contract bump on the chat persistence shape.
+export type TrackingFeedbackReasonCode =
+  | 'matched_request'
+  | 'strong_visual'
+  | 'useful_structure'
+  | 'easy_to_continue'
+  | 'missed_request'
+  | 'weak_visual'
+  | 'incomplete_output'
+  | 'hard_to_use'
+  | 'other';
+
+// Per product tracking doc: custom_reason is reported as a length bucket,
+// never the raw text.
+export type TrackingCustomReasonLengthBucket =
+  | '0'
+  | '1_20'
+  | '21_100'
+  | '101_500'
+  | '501_plus';
 
 export type TrackingTokenCountSource =
   | 'provider_usage'
@@ -368,6 +401,54 @@ export interface ArtifactExportResultProps {
   export_duration_ms: number;
 }
 
+interface AssistantFeedbackBase {
+  page: 'studio';
+  area: 'chat_panel';
+  project_id: string;
+  project_kind: TrackingProjectKind;
+  conversation_id: string;
+  assistant_message_id: string;
+  // run_id may be absent for messages whose run record is missing or pruned,
+  // but the product funnel keys off this; we emit `null` rather than dropping
+  // the field so PostHog can distinguish "no run id" from "field forgotten".
+  run_id: string | null;
+  rating: TrackingFeedbackRating;
+}
+
+export interface AssistantFeedbackClickProps extends AssistantFeedbackBase {
+  element: 'assistant_feedback_button';
+  action: TrackingFeedbackAction;
+  previous_rating: TrackingPreviousFeedbackRating;
+  has_produced_files: boolean;
+}
+
+export interface AssistantFeedbackReasonViewProps extends AssistantFeedbackBase {
+  element: 'assistant_feedback_reason_panel';
+  view_type: 'panel';
+}
+
+// Shape shared by reason_click (button click) and reason_submit (result).
+// Both fire from the same submit handler with the same payload, threaded by
+// request_id so PostHog can stitch click→result.
+interface AssistantFeedbackReasonResultBase extends AssistantFeedbackBase {
+  reason: TrackingFeedbackReasonCode[];
+  reason_count: number;
+  has_custom_reason: boolean;
+  custom_reason: TrackingCustomReasonLengthBucket;
+}
+
+export interface AssistantFeedbackReasonClickProps
+  extends AssistantFeedbackReasonResultBase {
+  element: 'assistant_feedback_reason_submit_button';
+  action: 'click_submit_feedback_reason';
+}
+
+export interface AssistantFeedbackReasonSubmitProps
+  extends AssistantFeedbackReasonResultBase {
+  element: 'assistant_feedback_reason_submit';
+  action: 'submit_feedback_reason';
+}
+
 // ---- Discriminated union of all P0 event payloads ------------------------
 
 export type AnalyticsEventPayload =
@@ -390,7 +471,20 @@ export type AnalyticsEventPayload =
   | { event: 'studio_click'; props: StudioClickChatComposerProps | StudioClickShareOptionProps }
   | { event: 'run_created'; props: RunCreatedProps }
   | { event: 'run_finished'; props: RunFinishedProps }
-  | { event: 'artifact_export_result'; props: ArtifactExportResultProps };
+  | { event: 'artifact_export_result'; props: ArtifactExportResultProps }
+  | { event: 'assistant_feedback_click'; props: AssistantFeedbackClickProps }
+  | {
+      event: 'assistant_feedback_reason_view';
+      props: AssistantFeedbackReasonViewProps;
+    }
+  | {
+      event: 'assistant_feedback_reason_click';
+      props: AssistantFeedbackReasonClickProps;
+    }
+  | {
+      event: 'assistant_feedback_reason_submit';
+      props: AssistantFeedbackReasonSubmitProps;
+    };
 
 // ---- Enum mapping helpers (code ↔ CSV wire format) -----------------------
 //
@@ -586,4 +680,21 @@ export function artifactKindToTracking(args: {
     return 'doc';
   }
   return 'unknown';
+}
+
+// Bucket the assistant-feedback custom reason text into a coarse length
+// band. The product tracking doc forbids sending the raw text — buckets
+// only — so this is the single place that converts free text to wire
+// format. Trim trailing whitespace so accidental newlines don't bump a
+// blank field into '1_20'.
+export function customReasonLengthBucket(
+  text: string | null | undefined,
+): TrackingCustomReasonLengthBucket {
+  const trimmed = (text ?? '').trim();
+  const length = trimmed.length;
+  if (length === 0) return '0';
+  if (length <= 20) return '1_20';
+  if (length <= 100) return '21_100';
+  if (length <= 500) return '101_500';
+  return '501_plus';
 }

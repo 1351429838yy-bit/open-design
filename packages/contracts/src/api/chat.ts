@@ -64,6 +64,34 @@ export interface ChatMessageFeedback {
   updatedAt?: number;
 }
 
+/**
+ * POST /api/runs/:runId/feedback — relays the user's assistant-turn rating
+ * to Langfuse as a `score-create` so evals can filter traces by feedback.
+ * The daemon is the single network egress point for telemetry (web never
+ * talks to Langfuse directly), and gates this on `telemetry.metrics +
+ * telemetry.content` consent independently of what the browser thinks.
+ *
+ * Custom-reason free text is NEVER sent over the wire — the web client
+ * computes a length bucket via `customReasonLengthBucket()` and forwards
+ * only that. The bucket follows the product tracking doc constraint and
+ * lets PostHog/Langfuse keep their distributions comparable.
+ */
+export interface ChatRunFeedbackRequest {
+  projectId: string;
+  conversationId: string;
+  assistantMessageId: string;
+  rating: ChatMessageFeedbackRating;
+  reasonCodes: ChatMessageFeedbackReasonCode[];
+  hasCustomReason: boolean;
+  /** Coarse length bucket of the custom reason — `customReasonLengthBucket()`. */
+  customReasonLengthBucket: '0' | '1_20' | '21_100' | '101_500' | '501_plus';
+}
+
+export interface ChatRunFeedbackResponse {
+  /** `'accepted'` once the daemon has enqueued (or skipped due to consent). */
+  status: 'accepted' | 'skipped_consent' | 'skipped_no_sink';
+}
+
 export interface ChatRunCreateResponse {
   runId: string;
 }
